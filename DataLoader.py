@@ -8,17 +8,30 @@ randomly selects 600 patients, and downloads:
 """
 
 import os
+import sys
 import csv
 import random
 import boto3
 from botocore.config import Config
+from dotenv import load_dotenv
 
 # ============================================================
-# AWS CREDENTIALS — Fill in your real values below
+# AWS CREDENTIALS — Loaded from .env file (never commit .env)
 # ============================================================
-AWS_ACCESS_KEY_ID = "YOUR_ACCESS_KEY_ID"
-AWS_SECRET_ACCESS_KEY = "YOUR_SECRET_ACCESS_KEY"
-AWS_REGION = "YOUR_REGION"  # e.g. "eu-west-1"
+load_dotenv()  # reads .env file in the same directory
+
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_REGION = os.getenv("AWS_REGION")
+
+if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY or not AWS_REGION:
+    print("ERROR: AWS credentials not found.")
+    print("Create a .env file in the same folder as this script with:")
+    print('  AWS_ACCESS_KEY_ID=your_key')
+    print('  AWS_SECRET_ACCESS_KEY=your_secret')
+    print('  AWS_REGION=your_region')
+    print("See .env.example for a template.")
+    sys.exit(1)
 
 # ============================================================
 # CONFIGURATION

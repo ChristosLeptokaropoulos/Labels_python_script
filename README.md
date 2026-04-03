@@ -86,47 +86,49 @@ You should see `(.venv)` at the beginning of your terminal prompt.
 
 ### Step 3: Install required packages
 
-The script needs the `boto3` library (AWS SDK for Python). Install it by running:
+The script needs `boto3` (AWS SDK) and `python-dotenv` (loads credentials from a `.env` file). Install both:
 
 ```
-pip install boto3
+pip install boto3 python-dotenv
 ```
 
-To verify it installed correctly:
+To verify they installed correctly:
 ```
-pip show boto3
+pip show boto3 python-dotenv
 ```
-You should see package information including the version number.
+You should see package information for both.
 
 ---
 
 ## Configuration
 
-Before running the script, you need to edit **DataLoader.py** and fill in your settings.
+### 1. AWS Credentials (REQUIRED) — via `.env` file
 
-### 1. AWS Credentials (REQUIRED)
+Credentials are loaded from a **`.env` file** that stays on your machine and is **never pushed to GitHub** (it is listed in `.gitignore`).
 
-Open `DataLoader.py` in any text editor and find these lines near the top (lines 19–21):
+**Step 1:** Copy the example template to create your own `.env` file:
 
-```python
-AWS_ACCESS_KEY_ID = "YOUR_ACCESS_KEY_ID"
-AWS_SECRET_ACCESS_KEY = "YOUR_SECRET_ACCESS_KEY"
-AWS_REGION = "YOUR_REGION"  # e.g. "eu-west-1"
+```
+copy .env.example .env
 ```
 
-Replace the placeholder values with your real AWS credentials:
+**Step 2:** Open the new `.env` file in any text editor and fill in your real values:
 
-```python
-AWS_ACCESS_KEY_ID = "AKIA..."          # Your actual Access Key ID
-AWS_SECRET_ACCESS_KEY = "wJalr..."     # Your actual Secret Access Key
-AWS_REGION = "eu-west-1"               # The AWS region where the bucket is located
+```
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=wJalr...
+AWS_REGION=eu-west-1
 ```
 
-> **⚠️ SECURITY WARNING:** Never commit your real AWS credentials to Git. The `.gitignore` should exclude any files containing secrets. If you accidentally commit credentials, rotate them immediately in the AWS console.
+> **⚠️ SECURITY:** The `.env` file is git-ignored and will NOT be pushed to GitHub.  
+> **Never** put credentials directly in `DataLoader.py` or any other tracked file.  
+> If you accidentally commit credentials, rotate them immediately in the AWS console.
+
+If the `.env` file is missing or incomplete, the script will print an error and exit.
 
 ### 2. Number of patients (OPTIONAL)
 
-By default the script selects **600** random patients. To change this, edit line 29:
+By default the script selects **600** random patients. To change this, edit this line in `DataLoader.py`:
 
 ```python
 NUM_PATIENTS = 600
@@ -134,7 +136,7 @@ NUM_PATIENTS = 600
 
 ### 3. Output directory (OPTIONAL)
 
-By default, files are downloaded to `C:\Users\user\Desktop\Labels_orasis\downloaded_data`. To change this, edit line 30:
+By default, files are downloaded to `C:\Users\user\Desktop\Labels_orasis\downloaded_data`. To change this, edit this line in `DataLoader.py`:
 
 ```python
 LOCAL_OUTPUT_DIR = r"C:\Users\user\Desktop\Labels_orasis\downloaded_data"
