@@ -1,6 +1,11 @@
 # S3 CT Brain Scan DataLoader
 
-A Python script that connects to AWS S3, randomly selects **600 patient CT brain scan cases** from the hospital database, and downloads their DICOM files along with associated reports (XML and DOC) to a local folder.
+Two Python scripts that work together to select **600 random CT brain scan cases** from a PostgreSQL database and download their DICOM files and reports from AWS S3.
+
+| Script | Purpose |
+|---|---|
+| `QueryDB.py` | Queries the database, selects 600 random cases with anomalies, outputs `selected_cases.csv` |
+| `DataLoader.py` | Reads the CSV, downloads matching DICOM files + reports from S3 |
 
 ---
 
@@ -45,6 +50,10 @@ python -m ensurepip --upgrade
 
 You need valid AWS credentials (Access Key ID and Secret Access Key) with **read access** to the S3 bucket `bioanalytixdata`. Ask your project administrator if you don't have these.
 
+### 4. PostgreSQL Database Access
+
+You need access to the PostgreSQL database that contains the `ct_scans` and `anomalies` tables. You'll need: host, port, database name, username, and password.
+
 ---
 
 ## Installation
@@ -86,17 +95,17 @@ You should see `(.venv)` at the beginning of your terminal prompt.
 
 ### Step 3: Install required packages
 
-The script needs `boto3` (AWS SDK) and `python-dotenv` (loads credentials from a `.env` file). Install both:
+The scripts need `boto3` (AWS SDK), `python-dotenv` (loads credentials from `.env`), and `psycopg2-binary` (PostgreSQL driver). Install all:
 
 ```
-pip install boto3 python-dotenv
+pip install boto3 python-dotenv psycopg2-binary
 ```
 
 To verify they installed correctly:
 ```
-pip show boto3 python-dotenv
+pip show boto3 python-dotenv psycopg2-binary
 ```
-You should see package information for both.
+You should see package information for all three.
 
 ---
 
@@ -118,20 +127,26 @@ copy .env.example .env
 AWS_ACCESS_KEY_ID=AKIA...
 AWS_SECRET_ACCESS_KEY=wJalr...
 AWS_REGION=eu-west-1
+
+DB_HOST=your_database_host
+DB_PORT=5432
+DB_NAME=your_database_name
+DB_USER=your_username
+DB_PASSWORD=your_password
 ```
 
 > **⚠️ SECURITY:** The `.env` file is git-ignored and will NOT be pushed to GitHub.  
-> **Never** put credentials directly in `DataLoader.py` or any other tracked file.  
-> If you accidentally commit credentials, rotate them immediately in the AWS console.
+> **Never** put credentials directly in any `.py` file or any other tracked file.  
+> If you accidentally commit credentials, rotate them immediately.
 
-If the `.env` file is missing or incomplete, the script will print an error and exit.
+If the `.env` file is missing or incomplete, both scripts will print an error and exit.
 
-### 2. Number of patients (OPTIONAL)
+### 2. Number of cases (OPTIONAL)
 
-By default the script selects **600** random patients. To change this, edit this line in `DataLoader.py`:
+By default `QueryDB.py` selects **600** random cases. To change this, edit this line in `QueryDB.py`:
 
 ```python
-NUM_PATIENTS = 600
+NUM_CASES = 600
 ```
 
 ### 3. Output directory (OPTIONAL)
@@ -154,44 +169,76 @@ If you see `(.venv)` in your terminal prompt, you're good. If not, activate it:
 .\.venv\Scripts\Activate.ps1
 ```
 
-### Step 2: Run the script
+### Step 2: Run QueryDB.py (select cases from database)
+
+```
+python QueryDB.py
+```
+
+This will:
+1. Connect to the PostgreSQL database
+2. Select 600 random CT scans that have a **non-NULL anomaly_type**
+3. Save the results to `selected_cases.csv` in the script folder
+4. Print a summary with the anomaly type distribution
+
+Example output:
+```
+Selecting 600 random scans with non-NULL anomaly_type...
+Retrieved 600 cases.
+
+SUMMARY
+Total cases selected: 600
+Anomaly type distribution:
+  hemorrhage: 142
+  fracture: 98
+  ...
+```
+
+### Step 3: Run DataLoader.py (download from S3)
 
 ```
 python DataLoader.py
 ```
 
-### What to expect
-
-1. The script will connect to S3 and list all patient folders — this may take a minute.
-2. It will randomly select 600 patients (or fewer if less are available).
-3. For each patient, it will:
-   - Find the CT scan series with the most DICOM files
-   - Download those DICOM files
-   - Download any XML reports
-   - Download any DOC reports
-4. Progress is printed for each patient:
+This will:
+1. Read `selected_cases.csv`
+2. For each case, find the CT scan series with the most DICOM files on S3
+3. Download those DICOM files + XML and DOC reports
+4. Print progress per patient:
    ```
-   [1/600] P00000222267990 — 45 DICOMs, 1 XML, 1 DOC
-   [2/600] P00000333378001 — 32 DICOMs, 1 XML, 0 DOC
+   [1/600] P109259 — 45 DICOMs, 1 XML, 1 DOC
+   [2/600] P203841 — 32 DICOMs, 1 XML, 0 DOC
    ...
    ```
-5. At the end, a summary is printed with totals.
-6. A `manifest.csv` file is saved in the output directory with details of all downloaded patients.
+5. Save a `manifest.csv` in the output directory with download details
 
 ### Estimated runtime
 
-Depending on your internet speed and the size of the DICOM files, downloading 600 patients may take **several hours**. The script prints progress so you can monitor it.
+- **QueryDB.py**: A few seconds
+- **DataLoader.py**: Several hours depending on internet speed and DICOM file sizes. The script prints progress so you can monitor it.
 
 ---
 
 ## Output Structure
 
-After the script completes, the output directory will look like this:
+After running both scripts, you will have:
+
+### `selected_cases.csv` (in the script folder)
+
+Produced by `QueryDB.py`. Contains the 600 selected cases with columns:
+- `scan_id` — Database scan ID
+- `patient_id` — Patient identifier
+- `s3_path` — Full S3 path to the R1_ report folder
+- `anomaly_type` — Type of anomaly for this scan
+
+### Downloaded data (in the output folder)
+
+Produced by `DataLoader.py`:
 
 ```
 downloaded_data/
-├── manifest.csv                          ← CSV with all patient details
-├── P00000222267990/
+├── manifest.csv                          ← CSV with download details
+├── P109259/
 │   ├── dicoms/
 │   │   ├── slice_001.dcm
 │   │   ├── slice_002.dcm
@@ -199,7 +246,7 @@ downloaded_data/
 │   └── reports/
 │       ├── report.xml
 │       └── report.doc
-├── P00000333378001/
+├── P203841/
 │   ├── dicoms/
 │   │   └── ...
 │   └── reports/
@@ -211,6 +258,7 @@ downloaded_data/
 - **`reports/`** — Contains the XML report and/or the DOC report (if they exist).
 - **`manifest.csv`** — A spreadsheet-compatible file with columns:
   - `patient_id` — The patient folder name
+  - `anomaly_type` — Type of anomaly for this scan
   - `dicom_count` — Number of DICOM files downloaded
   - `xml_count` — Number of XML reports downloaded
   - `doc_count` — Number of DOC reports downloaded
@@ -245,21 +293,33 @@ s3://bioanalytixdata/Orasis_Project/CT_Brain_Scans/G.H.Larissa/Dicom_Files/Old_P
 
 ## Troubleshooting
 
-### "ModuleNotFoundError: No module named 'boto3'"
-You haven't installed boto3. Run:
+### "ModuleNotFoundError: No module named 'boto3'" or 'psycopg2' or 'dotenv'
+You haven't installed the required packages. Run:
 ```
-pip install boto3
+pip install boto3 python-dotenv psycopg2-binary
 ```
 Make sure your virtual environment is activated first.
+
+### "ERROR: Database credentials not found."
+You haven't added the DB credentials to your `.env` file. See the [Configuration](#configuration) section.
+
+### "psycopg2.OperationalError: could not connect to server"
+Check that: (1) the DB_HOST and DB_PORT are correct, (2) the database server is running, (3) your machine can reach the server (VPN, firewall, etc.).
+
+### "ERROR: Query returned no results"
+The `ct_scans` and `anomalies` tables may be empty, or all `anomaly_type` values are NULL. Check the database directly.
+
+### "ERROR: Input CSV not found: selected_cases.csv"
+You need to run `QueryDB.py` first before running `DataLoader.py`.
 
 ### "botocore.exceptions.ClientError: An error occurred (AccessDenied)"
 Your AWS credentials don't have permission to access the S3 bucket. Check with your project administrator that your IAM user has `s3:ListBucket` and `s3:GetObject` permissions on the `bioanalytixdata` bucket.
 
 ### "botocore.exceptions.NoCredentialsError"
-You haven't filled in the AWS credentials in `DataLoader.py`. See the [Configuration](#configuration) section.
+You haven't filled in the AWS credentials in your `.env` file. See the [Configuration](#configuration) section.
 
 ### "botocore.exceptions.EndpointConnectionError"
-Check your internet connection, or verify that the `AWS_REGION` value is correct.
+Check your internet connection, or verify that the `AWS_REGION` value in `.env` is correct.
 
 ### "ERROR: No patient folders found"
 The S3 path may be incorrect, or the credentials may be wrong. Double-check the bucket name and prefix in the script.

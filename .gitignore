@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 downloaded_data/
 .env
+selected_cases.csv
